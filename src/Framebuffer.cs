@@ -1,5 +1,5 @@
-using OpenTK.Graphics.OpenGL4;
 using System.Collections.Generic;
+using OpenTK.Graphics.OpenGL4;
 
 namespace DominusCore {
 	/// <summary> Wrapper class for the concept of an OpenGL framebuffer. This provides easy methods attaching 
@@ -9,7 +9,7 @@ namespace DominusCore {
 		public Texture Depth { get; private set; } = null;
 		private List<Texture> _bufferTextures = new List<Texture>();
 
-		/// <summary> Creates a generic Framebuffer with no ID and no attachments. </summary>
+		/// <summary> Creates a generic Framebuffer with a generated ID and no attachments. </summary>
 		public Framebuffer() {
 			FramebufferID = GL.GenFramebuffer();
 			Use();

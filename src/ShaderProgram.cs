@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
 
 namespace DominusCore {
 	/// <summary> Superclass for all shaderprograms. Handles attachment and cleanup of individual shaders. </summary>

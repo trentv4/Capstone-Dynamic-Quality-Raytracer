@@ -3,20 +3,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
-using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace DominusCore {
 	public class Renderer : GameWindow {
 		// Constants
 		/// <summary> Radian Conversion Factor (used for degree-radian conversions). Equal to pi/180. </summary>
 		internal const float RCF = 0.017453293f;
-		// Multithreading hint
-		public static bool IsUpdateComplete = false;
 
 		// Rendering
 		public static ShaderProgramGeometry GeometryShader;
@@ -102,7 +98,7 @@ namespace DominusCore {
 			Matrix4 MatrixView = Matrix4.LookAt(CameraPosition, CameraPosition + CameraTarget, Vector3.UnitY);
 			GL.UniformMatrix4(GeometryShader.UniformView_ID, true, ref MatrixView);
 			GL.UniformMatrix4(GeometryShader.UniformPerspective_ID, true, ref Perspective3D);
-			int drawcalls = Scene.Geometry.Draw();
+			Scene.Geometry.Draw();
 			frameAnalyzer.EndPass();
 
 			frameAnalyzer.StartPass("Lighting");
@@ -121,11 +117,11 @@ namespace DominusCore {
 			DefaultFramebuffer.BlitFrom(FramebufferGeometry, ClearBufferMask.DepthBufferBit);
 			InterfaceShader.Use(RenderPass.InterfaceBackground);
 			GL.UniformMatrix4(InterfaceShader.UniformPerspective_ID, true, ref Perspective2D);
-			drawcalls += Scene.Interface.Draw();
+			Scene.Interface.Draw();
 			InterfaceShader.Use(RenderPass.InterfaceForeground);
-			drawcalls += Scene.Interface.Draw();
+			Scene.Interface.Draw();
 			InterfaceShader.Use(RenderPass.InterfaceText);
-			drawcalls += Scene.Interface.Draw();
+			Scene.Interface.Draw();
 			frameAnalyzer.EndPass();
 
 			// Frame done
@@ -210,21 +206,24 @@ namespace DominusCore {
 			}
 		}
 
-		public static void Crash(string error) {
-			Crash(new Exception(error));
-		}
-
-		public static void Crash(Exception e) {
-			Console.WriteLine(e.ToString());
-			Exit(-1);
-		}
-
 		public static void Exit() {
-			Exit(0);
+			System.Environment.Exit(0);
 		}
 
-		public static void Exit(int error) {
-			System.Environment.Exit(error);
+		public static void Exit(string error) {
+			Exit(new Exception(error));
+		}
+
+		public static void Exit(Exception e) {
+			Console.WriteLine(e.ToString());
+			System.Environment.Exit(-1);
+		}
+	}
+
+	/// <summary> Useful extensions to various classes. </summary>
+	public static class Extensions {
+		public static string Get(this Dictionary<string, string> dict, string key) {
+			return dict.GetValueOrDefault(key);
 		}
 	}
 }
