@@ -38,10 +38,7 @@ namespace DominusCore {
 		// Debugging
 		private static DebugProc debugCallback = DebugCallback;
 		private static GCHandle debugCallbackHandle;
-		private static Stopwatch frameTimer = new Stopwatch();
-		/// <summary> Array storing the last n frame lengths, to provide an average in the title bar for performance monitoring. </summary>
-		private double[] frameTimes = new double[30];
-		private int _debugGroupTracker = 0;
+		private static FrameAnalyzer frameAnalyzer = new FrameAnalyzer();
 
 		public Renderer(GameWindowSettings gws, NativeWindowSettings nws) : base(gws, nws) { }
 
@@ -90,7 +87,7 @@ namespace DominusCore {
 
 		/// <summary> Core render loop. <br/> THREAD: OpenGL </summary>
 		protected override void OnRenderFrame(FrameEventArgs args) {
-			frameTimer.Restart();
+			frameAnalyzer.StartFrame();
 
 			OnUpdateFrame();
 
@@ -99,16 +96,16 @@ namespace DominusCore {
 			Matrix4 Perspective2D = Matrix4.CreateOrthographicOffCenter(0f, (float)Size.X, 0f, (float)Size.Y, ProjectMatrixNearFar.X, ProjectMatrixNearFar.Y);
 			List<Light> listSceneLights = Scene.Geometry.GetAllChildrenOfType<Light>();
 
-			BeginPass("G-Buffer");
+			frameAnalyzer.StartPass("G-Buffer");
 			FramebufferGeometry.Use().Reset();
 			GeometryShader.Use(RenderPass.Geometry);
 			Matrix4 MatrixView = Matrix4.LookAt(CameraPosition, CameraPosition + CameraTarget, Vector3.UnitY);
 			GL.UniformMatrix4(GeometryShader.UniformView_ID, true, ref MatrixView);
 			GL.UniformMatrix4(GeometryShader.UniformPerspective_ID, true, ref Perspective3D);
 			int drawcalls = Scene.Geometry.Draw();
-			EndPass();
+			frameAnalyzer.EndPass();
 
-			BeginPass("Lighting");
+			frameAnalyzer.StartPass("Lighting");
 			DefaultFramebuffer.Use().Reset();
 			LightingShader.Use(RenderPass.Lighting);
 			FramebufferGeometry.GetAttachment(0).Bind(0);
@@ -117,9 +114,9 @@ namespace DominusCore {
 			GL.Uniform3(LightingShader.UniformCameraPosition_ID, CameraPosition.X, CameraPosition.Y, CameraPosition.Z);
 			LightingShader.SetLightSSBO(listSceneLights);
 			GL.DrawArrays(OpenTK.Graphics.OpenGL4.PrimitiveType.Triangles, 0, 3);
-			EndPass();
+			frameAnalyzer.EndPass();
 
-			BeginPass("Interface");
+			frameAnalyzer.StartPass("Interface");
 			// Copy geometry depth to default framebuffer (world space -> screen space)
 			DefaultFramebuffer.BlitFrom(FramebufferGeometry, ClearBufferMask.DepthBufferBit);
 			InterfaceShader.Use(RenderPass.InterfaceBackground);
@@ -129,19 +126,11 @@ namespace DominusCore {
 			drawcalls += Scene.Interface.Draw();
 			InterfaceShader.Use(RenderPass.InterfaceText);
 			drawcalls += Scene.Interface.Draw();
-			EndPass();
+			frameAnalyzer.EndPass();
 
 			// Frame done
 			Context.SwapBuffers();
-			frameTimer.Stop();
-
-			// How long did the frame take?
-			Array.Copy(frameTimes, 1, frameTimes, 0, frameTimes.Length - 1);
-			frameTimes[frameTimes.Length - 1] = 1000f * frameTimer.ElapsedTicks / Stopwatch.Frequency;
-			double time = frameTimes.Sum() / frameTimes.Length;
-			double goal = 1000 / 60;
-			this.Title = $"Display - FPS: {1000 / time,-1:F1} Drawcalls: {drawcalls} Lights: {listSceneLights.Count()} Frametime: {time,-4:F2}ms, Budget: {time / goal,-2:P2} (target: {goal}ms)";
-			_debugGroupTracker = 0;
+			frameAnalyzer.EndFrame();
 		}
 
 		private void OnUpdateFrame() {
@@ -161,14 +150,41 @@ namespace DominusCore {
 			if (type == DebugType.DebugTypeError)
 				throw new Exception(messageString);
 		}
+	}
+
+	public class FrameAnalyzer {
+		// Tracks the OpenGL "debug group" which tags all draw calls while active for frame analysis tools.
+		private int _debugGroupTracker = 0;
+		// The purpose of all these timer-related variables is to produce an "average frame time"
+		// over the last 30 frames. This prevents the LastFrameTime from varying so much frame-to-frame
+		// as to be unreadable when used, for example, in a title bar. 
+		private Stopwatch _timer = new Stopwatch();
+		private double[] _frameTimes = new double[30];
+		public double LastFrameTime {
+			get { return _frameTimes.Sum() / _frameTimes.Length; }
+			private set { }
+		}
+
+		/// <summary> Starts a frame, including reseting the timer and the currently active debug group. </summary>
+		public void StartFrame() {
+			_timer.Restart();
+			_debugGroupTracker = 0;
+		}
+
+		/// <summary> Ends the frame and records the time the frame took to run. </summary>
+		public void EndFrame() {
+			_timer.Stop();
+			Array.Copy(_frameTimes, 1, _frameTimes, 0, _frameTimes.Length - 1);
+			_frameTimes[_frameTimes.Length - 1] = 1000f * _timer.ElapsedTicks / Stopwatch.Frequency;
+		}
 
 		/// <summary> Starts a GPU debug group, used for grouping operations together into one section for debugging in RenderDoc. </summary>
-		private void BeginPass(string title) {
+		public void StartPass(string title) {
 			GL.PushDebugGroup(DebugSourceExternal.DebugSourceApplication, _debugGroupTracker++, title.Length, title);
 		}
 
 		/// <summary> Ends the current debug group on the GPU. </summary>
-		private void EndPass() {
+		public void EndPass() {
 			GL.PopDebugGroup();
 		}
 
@@ -210,6 +226,5 @@ namespace DominusCore {
 		public static void Exit(int error) {
 			System.Environment.Exit(error);
 		}
-
 	}
 }
